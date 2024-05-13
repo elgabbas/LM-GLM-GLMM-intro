@@ -109,7 +109,7 @@ library(ggplot2)
 ggplot(trees) +
   aes(dbh, height) +
   geom_point() +
-  geom_smooth(method = "lm", size = 3) +
+  geom_smooth(method = "lm", linewidth = 3) +
   labs(x = "DBH (cm)", y = "Height (m)", title = "Single intercept") +
   theme_minimal(base_size = 16)
 ```
@@ -121,7 +121,7 @@ ggplot(trees) +
 ggplot(subset(trees, site == 1 | site == 2)) +
   aes(dbh, height, colour = site) +
   geom_point() +
-  geom_smooth(method = "lm", size = 3) +
+  geom_smooth(method = "lm", linewidth = 3) +
   labs(x = "DBH (cm)", y = "Height (m)", 
        title = "Different intercept for each site") +
   theme_minimal(base_size = 16) +
@@ -135,7 +135,7 @@ ggplot(subset(trees, site == 1 | site == 2)) +
 \footnotesize
 
 ```{r lm_varying, echo=FALSE}
-lm.interc <- lm(height ~ factor(site) + dbh, data = trees)
+lm.interc <- lm(height ~ site + dbh, data = trees)
 summary(lm.interc)
 ```
 
@@ -148,27 +148,24 @@ summary(lm.interc)
 :::::::::::::: {.columns align=center}
 
 ::: {.column width="50%"}
+
+Single intercept
+
 ```{r single_interc, echo=FALSE}
-ggplot(trees) +
-  aes(dbh, height) +
-  geom_point() +
-  geom_smooth(method = "lm", size = 3) +
-  labs(x = "DBH (cm)", y = "Height (m)", title = "Single intercept") +
-  theme_minimal(base_size = 16)
+library(visreg)
+visreg(lm.simple)
 ```
+
 :::
 
 ::: {.column width="50%" }
+
+Different intercept for each site
+
 ```{r varying_interc, echo=FALSE}
-ggplot(trees) +
-  aes(dbh, height, colour = site) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", size = 1.5, se = FALSE) +
-  labs(x = "DBH (cm)", y = "Height (m)", 
-       title = "Different intercept for each site") +
-  theme_minimal(base_size = 16) +
-  theme(legend.position = "none")
+visreg(lm.interc, xvar = "dbh", by = "site", overlay = TRUE, band = FALSE)
 ```
+
 :::
 ::::::::::::::
 
@@ -204,6 +201,8 @@ $$
 
 ---
 
+\LARGE
+
 Mixed models estimate **varying parameters**
 
 (intercepts and/or slopes)
@@ -217,9 +216,13 @@ Mixed models estimate **varying parameters**
 
 - **complete pooling**: Single overall intercept.
     - `lm (height ~ dbh)`
+    
+\vspace{5mm}
 
 - **no pooling**: One *independent* intercept for each site.
     - `lm (height ~ dbh + site)`
+    
+\vspace{5mm}
 
 - **partial pooling**: Inter-related intercepts.
     - `lmer(height ~ dbh + (1 | site))`
@@ -246,7 +249,7 @@ http://andrewgelman.com/2005/01/25/why_i_dont_use/
 
 - Variation estimated with **probability model**
 
-Random effects are estimated with *partial pooling*, while fixed effects are not
+Random effects are estimated with *partial pooling* (shrinkage, regularisation), while fixed effects are not
 (infinite variance).
 
 
@@ -260,15 +263,34 @@ Especially for groups with low sample size
 *From Gelman & Hill p. 253*
 
 
+## Fitting mixed/multilevel models
+
+\tiny
+
+```{r mixed, echo=1:2}
+library("glmmTMB")
+mixed <- glmmTMB(height ~ dbh + (1|site), data = trees)
+summary(mixed)
+```
+
+
 
 ## Fitting mixed/multilevel models
 
-\scriptsize
+\tiny
 
-```{r mixed, echo=1:2}
+```{r mixed_lmer, echo=1:2}
 library("lme4")
 mixed <- lmer(height ~ dbh + (1|site), data = trees)
 summary(mixed)
+```
+
+
+## Statistical model structure
+
+```{r}
+library(equatiomatic)
+equatiomatic::extract_eq(mixed)
 ```
 
 
@@ -276,6 +298,18 @@ summary(mixed)
 
 ```{r mixed_coefs}
 coef(mixed)
+```
+
+
+## Compare site effects between mixed and lm
+
+```{r echo=FALSE}
+lm.noint <- lm(height ~ site + dbh - 1, data = trees)
+```
+
+```{r echo=FALSE}
+data.frame(lm = round(coef(lm.noint)[1:10], digits = 1), 
+  mixed = round(coef(mixed)$site[,1], digits = 1))
 ```
 
 
@@ -293,27 +327,6 @@ tidy(mixed)
 See also [broom.mixed](https://github.com/bbolker/broom.mixed)
 
 
-## Visualising model: `allEffects`
-
-\scriptsize
-
-:::::::::::::: {.columns align=center}
-
-::: {.column width="50%"}
-```{r mixed_vis1, echo=2}
-library(effects)
-allEffects(mixed)
-```
-:::
-
-::: {.column width="50%" }
-```{r mixed_vis2, echo=FALSE}
-plot(allEffects(mixed))
-```
-:::
-::::::::::::::
-
-
 
 
 
@@ -322,14 +335,23 @@ plot(allEffects(mixed))
 
 ```{r mixed_vis3, echo=2}
 library(visreg)
-visreg(mixed, xvar = "dbh", by = "site", re.form = NULL)
+visreg(mixed, xvar = "dbh", by = "site") 
 ```
 
 
 ## Visualising model
 
-```{r echo=TRUE, tinycode = TRUE}
-visreg(mixed, xvar = "dbh", by = "site", re.form = NULL, overlay = TRUE)
+```{r echo=2}
+mixed <- glmmTMB(height ~ dbh + (1|site), data = trees)
+visreg(mixed, xvar = "dbh", by = "site", overlay = TRUE)
+```
+
+
+## Visualising model
+
+```{r echo=1}
+visreg(mixed, xvar = "dbh", by = "site", overlay = TRUE, band = FALSE)
+mixed <- lmer(height ~ dbh + (1|site), data = trees)
 ```
 
 
@@ -345,7 +367,6 @@ theme_set(theme_minimal(base_size = 16))
 ```{r}
 sjPlot::plot_model(mixed, type = "re")
 ```
-
 
 
 
@@ -477,7 +498,8 @@ head(trees.full)
 
 ## Fit multilevel model
 
-\scriptsize
+\tiny
+
 ```{r echo=1}
 group.pred <- lmer(height ~ dbh + (1 | site) + temp, data = trees.full)
 summary(group.pred)
@@ -542,17 +564,28 @@ plot(sitedata$temp, coef(group.pred)$site[,1],
 
 ## Varying intercepts and slopes
 
-There is overall difference in height among sites (different intercepts)
-\newline
+- There is overall difference in height among sites (different intercepts)
 
-AND
-\newline
+- Relationship between DBH and Height varies among sites (different slopes)
 
-Relationship between DBH and Height varies among sites (different slopes)
+```{r echo=FALSE}
+df <- data.frame(dbh = seq(10, 50, by = 1), 
+                 height = seq(20, 60, by = 1))
+ggplot(df) +
+  aes(dbh, height) +
+  geom_blank() +
+  geom_abline(intercept = 25, slope = 0.6) +
+  geom_abline(intercept = 40, slope = 0.1, colour = "steelblue") +
+  geom_abline(intercept = 50, slope = -0.3, colour = "orangered")
+  
+```
 
+
+## Varying intercepts and slopes
 
 ```{r}
 mixed.slopes <- lmer(height ~ dbh + (1 + dbh | site), data=trees)
+equatiomatic::extract_eq(mixed.slopes)
 ```
 
 
@@ -604,13 +637,14 @@ summary(sleep)
 ## Varying intercepts and slopes (lme4)
 
 ```{r eval=TRUE}
-visreg(sleep, xvar = "Days", by = "Subject", re.form = NULL)
+visreg(sleep, xvar = "Days", by = "Subject")
 ```
 
 
 ## Fitting multilevel models (GAMM) with `mgcv`
 
-\small
+\scriptsize
+
 ```{r echo = 2}
 library(mgcv)
 sgamm <- mgcv::gam(Reaction ~ s(Days, Subject, k = 3, bs = "fs"), 
@@ -670,7 +704,7 @@ summary(simple.logis)
 \scriptsize
 
 ```{r, echo=1}
-logis2 <- glm(dead ~ dbh + factor(site), data = trees, family=binomial)
+logis2 <- glm(dead ~ dbh + site, data = trees, family=binomial)
 summary(logis2)
 ```
 
@@ -704,7 +738,7 @@ visreg(mixed.logis, xvar = "dbh", by = "site", scale = "response")
 ## Visualising model: `sjPlot`
 
 ```{r out.width="70%"}
-plot_model(mixed.logis, type = "eff", show.ci = TRUE)
+# plot_model(mixed.logis, type = "eff", show.ci = TRUE)
 ```
 
 
@@ -726,6 +760,8 @@ plot_model(mixed.logis, type = "eff", show.ci = TRUE)
 - More **efficient inference** of regression parameters
 
 - Using all the data to perform inferences for groups with **small sample size**
+
+- Allow predictions for **unobserved groups**
 
 
 ## Formula syntax for different models
@@ -751,8 +787,48 @@ plot_model(mixed.logis, type = "eff", show.ci = TRUE)
 
 https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html
 
+http://mfviz.com/hierarchical-models/
 
 
+## Exercises
 
+```{r eval = FALSE, echo=FALSE}
+
+counts <- DHARMa::createData(sampleSize = 1000, 
+                       intercept = 0,
+                       fixedEffects = 1,
+                       numGroups = 20, 
+                       family = poisson(), 
+                       overdispersion = 0.5)
+counts <- counts[,1:4]
+names(counts) <- c("ID", "count", "environment", "species")
+readr::write_csv(counts, "data/mixed_count.csv")
+
+mod <- glmmTMB(count ~ environment + (1|species), data = counts, family = poisson)
+DHARMa::simulateResiduals(mod, plot = TRUE)
+DHARMa::testDispersion(mod)
+```
+
+
+```{r eval = FALSE, echo=FALSE}
+binom <- DHARMa::createData(sampleSize = 1000, 
+                       intercept = 0,
+                       fixedEffects = 1,
+                       numGroups = 20, 
+                       family = binomial())
+binom <- binom[,1:4]
+names(binom) <- c("ID", "presabs", "environment", "species")
+readr::write_csv(binom, "data/mixed_binom.csv")
+
+mod <- glmmTMB(presabs ~ environment + (1|species), data = binom, family = binomial)
+DHARMa::simulateResiduals(mod, plot = TRUE)
+```
+
+
+- Starlings: body mass growth depending on nest type
+
+- Mixed_binom: Species presence/absence ~ environment
+
+- Mixed_count: Species counts ~ environment
 
 
